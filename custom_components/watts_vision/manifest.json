@@ -2,17 +2,18 @@
   "domain": "watts_vision",
   "name": "Watts Vision",
   "codeowners": [
+    "@RaginValdr",
     "@mirakels",
     "@nowarries",
     "@pwesters"
   ],
   "config_flow": true,
   "dependencies": [],
-  "documentation": "https://github.com/nowarries/watts_vision",
+  "documentation": "https://github.com/RaginValdr/watts_vision",
 
   "integration_type": "hub",
   "iot_class": "cloud_polling",
-  "issue_tracker": "https://github.com/nowarries/watts_vision/issues",
+  "issue_tracker": "https://github.com/RaginValdr/watts_vision/issues",
   "requirements": [],
-  "version": "0.5.0"
+  "version": "0.5.1"
 }

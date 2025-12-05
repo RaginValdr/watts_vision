@@ -21,6 +21,7 @@ This version includes the following:
 ### Maintainers (of this standalone version)
 - [nowarries](https://github.com/nowarries/) 
 - [mirakels](https://github.com/mirakels/)
+- [RaginValdr](https://github.com/RaginValdr/)
 
 # Installation
 
@@ -31,7 +32,7 @@ A Watts Vision system Cental unit is required to be able to see the settings rem
 
 ## HACS
 
-Add https://github.com/nowarries/watts_vision to the custom repositories in HACS. A new repository will be found. Click Download and restart Home Assistant. Go to Settings and then to Devices & Services. Click + Add Integration and search for Watts Vision.
+Add https://github.com/RaginValdr/watts_vision to the custom repositories in HACS. A new repository will be found. Click Download and restart Home Assistant. Go to Settings and then to Devices & Services. Click + Add Integration and search for Watts Vision.
 
 ## Manual Installation
 

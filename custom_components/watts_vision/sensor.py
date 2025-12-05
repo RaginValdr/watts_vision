@@ -10,7 +10,14 @@ from homeassistant.const import PERCENTAGE, UnitOfTemperature
 from homeassistant.core import HomeAssistant
 
 from .central_unit import WattsVisionLastCommunicationSensor
-from .const import API_CLIENT, CONSIGNE_MAP, DOMAIN, PRESET_MODE_MAP
+from .const import (
+    API_CLIENT,
+    DOMAIN,
+    _AVAILABLE_HEAT_MODES,
+    _AVAILABLE_TEMP_TYPES,
+    _DEVICE_TO_MODE_TYPE,
+    _TEMP_TYPE_TO_DEVICE,
+)
 from .watts_api import WattsApi
 
 _LOGGER = logging.getLogger(__name__)
@@ -35,7 +42,15 @@ async def async_setup_entry(
                     if smartHomes[y]["zones"][z]["devices"] is not None:
                         for x in range(len(smartHomes[y]["zones"][z]["devices"])):
                             sensors.append(
-                                WattsVisionThermostatSensor(
+                                WattsVisionPresetModeSensor(
+                                    wattsClient,
+                                    smartHomes[y]["smarthome_id"],
+                                    smartHomes[y]["zones"][z]["devices"][x]["id"],
+                                    smartHomes[y]["zones"][z]["zone_label"],
+                                )
+                            )
+                            sensors.append(
+                                WattsVisionTemperatureModeSensor(
                                     wattsClient,
                                     smartHomes[y]["smarthome_id"],
                                     smartHomes[y]["zones"][z]["devices"][x]["id"],
@@ -66,6 +81,14 @@ async def async_setup_entry(
                                     smartHomes[y]["zones"][z]["zone_label"],
                                 )
                             )
+                            sensors.append(
+                                WattsVisionBoostTimeRemainingSensor(
+                                    wattsClient,
+                                    smartHomes[y]["smarthome_id"],
+                                    smartHomes[y]["zones"][z]["devices"][x]["id"],
+                                    smartHomes[y]["zones"][z]["zone_label"],
+                                )
+                            )
             sensors.append(
                 WattsVisionLastCommunicationSensor(
                     wattsClient,
@@ -78,7 +101,7 @@ async def async_setup_entry(
     async_add_entities(sensors, update_before_add=True)
 
 
-class WattsVisionThermostatSensor(SensorEntity):
+class WattsVisionPresetModeSensor(SensorEntity):
     """Representation of a Watts Vision thermostat."""
 
     def __init__(self, wattsClient: WattsApi, smartHome: str, id: str, zone: str):
@@ -87,7 +110,7 @@ class WattsVisionThermostatSensor(SensorEntity):
         self.smartHome = smartHome
         self.id = id
         self.zone = zone
-        self._name = zone + " Heating mode"
+        self._name = zone + " Preset mode"
         self._state = None
         self._available = True
 
@@ -111,7 +134,7 @@ class WattsVisionThermostatSensor(SensorEntity):
 
     @property
     def options(self):
-        return list(PRESET_MODE_MAP.values())
+        return [mode.value.capitalize() for mode in _AVAILABLE_HEAT_MODES]
 
     @property
     def device_info(self):
@@ -131,12 +154,70 @@ class WattsVisionThermostatSensor(SensorEntity):
         # try:
         smartHomeDevice = self.client.getDevice(self.smartHome, self.id)
 
-        self._state = PRESET_MODE_MAP[smartHomeDevice["gv_mode"]]
+        self._state = _DEVICE_TO_MODE_TYPE[smartHomeDevice["gv_mode"]].heat_mode.value.capitalize()
 
         # except:
         #     self._available = False
         #     _LOGGER.exception("Error retrieving data.")
 
+class WattsVisionTemperatureModeSensor(SensorEntity):
+    """Representation of a Watts Vision thermostat."""
+
+    def __init__(self, wattsClient: WattsApi, smartHome: str, id: str, zone: str):
+        super().__init__()
+        self.client = wattsClient
+        self.smartHome = smartHome
+        self.id = id
+        self.zone = zone
+        self._name = zone + " Temperature mode"
+        self._state = None
+        self._available = True
+
+    @property
+    def unique_id(self) -> str:
+        """Return the unique ID of the sensor."""
+        return "temperature_mode_" + self.id
+
+    @property
+    def name(self) -> str:
+        """Return the name of the entity."""
+        return self._name
+
+    @property
+    def state(self) -> str | None:
+        return self._state
+
+    @property
+    def device_class(self):
+        return SensorDeviceClass.ENUM
+
+    @property
+    def options(self):
+        return [mode.value.capitalize() for mode in _AVAILABLE_TEMP_TYPES]
+
+    @property
+    def device_info(self):
+        return {
+            "identifiers": {
+                # Serial numbers are unique identifiers within a specific domain
+                (DOMAIN, self.id)
+            },
+            "manufacturer": "Watts",
+            "name": "Thermostat " + self.zone,
+            "model": "BT-D03-RF",
+            "via_device": (DOMAIN, self.smartHome),
+            "suggested_area": self.zone,
+        }
+
+    async def async_update(self):
+        # try:
+        smartHomeDevice = self.client.getDevice(self.smartHome, self.id)
+
+        self._state = _DEVICE_TO_MODE_TYPE[smartHomeDevice["gv_mode"]].temp_type.value.capitalize()
+
+        # except:
+        #     self._available = False
+        #     _LOGGER.exception("Error retrieving data.")
 
 class WattsVisionBatterySensor(SensorEntity):
     """Representation of the state of a Watts Vision device."""
@@ -308,11 +389,87 @@ class WattsVisionSetTemperatureSensor(SensorEntity):
         if smartHomeDevice["gv_mode"] == "1":
             self._state = NaN
         else:
-            value = int(smartHomeDevice[CONSIGNE_MAP[smartHomeDevice["gv_mode"]]])
+            value = int(smartHomeDevice[_TEMP_TYPE_TO_DEVICE[_DEVICE_TO_MODE_TYPE[smartHomeDevice["gv_mode"]].temp_type]])
             if self.hass.config.units.temperature_unit == UnitOfTemperature.CELSIUS:
                 self._state = round((value - 320) * 5 / 9 / 10, 1)
             else:
                 self._state = value / 10
+
+        # except:
+        #     self._available = False
+        #     _LOGGER.exception("Error retrieving data.")
+
+class WattsVisionBoostTimeRemainingSensor(SensorEntity):
+    def __init__(self, wattsClient: WattsApi, smartHome: str, id: str, zone: str):
+        super().__init__()
+        self.client = wattsClient
+        self.smartHome_id = smartHome
+        self.device_id = id
+        self.zone_label = zone
+        self._name = zone + " Boost time remaining"
+        self._state = None
+        self._available = True
+        self._attr_native_value = None
+        self._attr_extra_state_attributes = {
+            "hour": None,
+            "minute": None,
+            "second": None,
+            "timestamp": None,
+        }
+
+    @property
+    def unique_id(self) -> str:
+        """Return the unique ID of the sensor."""
+        return "boost_time_remaining_" + self.device_id
+
+    @property
+    def name(self) -> str:
+        """Return the name of the entity."""
+        return self._name
+
+    @property
+    def state(self) -> str | None:
+        return self._state
+
+
+    @property
+    def device_class(self):
+        return SensorDeviceClass.DURATION
+
+    @property
+    def device_info(self):
+        return {
+            "identifiers": {
+                # Serial numbers are unique identifiers within a specific domain
+                (DOMAIN, self.device_id)
+            },
+            "manufacturer": "Watts",
+            "name": "Thermostat " + self.zone_label,
+            "model": "BT-D03-RF",
+            "via_device": (DOMAIN, self.smartHome_id),
+        }
+
+
+    async def async_update(self):
+        # try:
+        smartHomeDevice = self.client.getDevice(self.smartHome_id, self.device_id)
+        value = int(smartHomeDevice["time_boost"])
+        remaining = timedelta(seconds=value)
+
+        # Sensor state: HH:MM:SS
+        self._attr_native_value = str(remaining)
+        self._state = str(remaining)
+
+        # Attributes: breakdown like input_datetime
+        total_seconds = int(remaining.total_seconds())
+        hours = total_seconds // 3600
+        minutes = (total_seconds % 3600) // 60
+        seconds = total_seconds % 60
+
+        self._attr_extra_state_attributes["hour"] = hours
+        self._attr_extra_state_attributes["minute"] = minutes
+        self._attr_extra_state_attributes["second"] = seconds
+        self._attr_extra_state_attributes["timestamp"] = total_seconds
 
         # except:
         #     self._available = False
